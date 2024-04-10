@@ -1,0 +1,80 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  ROOT: $CI_PROJECT_DIR
+  SIMPLEBASH: $CI_PROJECT_DIR/src/SimpleBash
+
+run_makefiles:
+  stage: build
+  tags:
+    - simplebash
+  script:
+    - mkdir $ROOT/build
+    - cd $SIMPLEBASH/cat
+    - make s21_cat
+    - cp s21_cat $ROOT/build
+    - cd $SIMPLEBASH/grep
+    - make s21_grep
+    - cp s21_grep $ROOT/build
+  artifacts:
+      paths:
+          - $ROOT/build
+      expire_in: 30 days
+
+code_style:
+  stage: test
+  tags:
+    - simplebash
+  script:
+    - cd $SIMPLEBASH
+    - cp $ROOT/materials/linters/.clang-format $SIMPLEBASH/.clang-format
+    - clang-format -n --verbose --Werror $SIMPLEBASH/*/s21_*.*
+  allow_failure: false
+
+tests:
+  stage: test
+  tags:
+    - simplebash
+  script:
+    - cd $SIMPLEBASH/cat
+    - make tests | tee log_cat.txt
+    - cd $SIMPLEBASH/grep
+    - make tests | tee log_grep.txt
+    - res1=$(tail -q -n1 $SIMPLEBASH/cat/log_cat.txt)
+    - res2=$(tail -q -n1 $SIMPLEBASH/grep/log_grep.txt)
+    - if [[ $res1 == "FAIL - 0" ]]; then echo "CAT tests ok."; else echo "CAT tests fail."; fi
+    - if [[ $res2 == "FAIL - 0" ]]; then echo "GREP tests ok."; else echo "GREP tests fail."; fi
+  allow_failure: false
+  when: on_success
+  after_script:
+    - cd $ROOT/src/
+    - chmod 777 message.sh
+    - bash message.sh $CI_JOB_STATUS
+
+copy:
+  stage: deploy
+  tags:
+    - simplebash
+  allow_failure: false
+  when: manual
+  script:
+    - cd $ROOT/src/
+    - chmod 777 copy.sh
+    - ./main.exp
+  after_script:
+    - cd $ROOT/src/
+    - chmod 777 message.sh
+    - bash message.sh $CI_JOB_STATUS
+
+#echo_ok:
+#  stage: deploy
+#  tags:
+#    - simplebash
+#  script:
+#    - echo "Than is Ok, I am doing now"
+#  when: on_success
+
+
